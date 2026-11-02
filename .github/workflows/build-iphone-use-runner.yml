@@ -45,6 +45,7 @@ jobs:
       - name: Package unsigned IPA
         working-directory: iphone-use/runner/IPhoneUseRunner
         run: |
+          exec > >(tee package.log) 2>&1
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
@@ -80,8 +81,17 @@ jobs:
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          if-no-files-found: error
+          if-no-files-found: warn
+          retention-days: 2
           name: iphone-use-visible-runner-v0.27.34
           path: |
             iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa
             iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa.sha256
+
+      - name: Upload package log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-log
+          path: iphone-use/runner/IPhoneUseRunner/package.log
+          if-no-files-found: warn
