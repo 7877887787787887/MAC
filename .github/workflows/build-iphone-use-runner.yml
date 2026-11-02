@@ -32,18 +32,6 @@ jobs:
           sed -i '' 's/var keyframeSeconds = 10.0/var keyframeSeconds = 2.0/' "$file"
           grep -nE 'var fps|scalePercent|var kbps|keyframeSeconds' "$file"
 
-      - name: Enable inbound local-network access
-        working-directory: iphone-use/runner/IPhoneUseRunner
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The runner's NWListener binds all interfaces, but iOS local-network privacy
-          # must be declared in the generated XCTest runner plist or inbound LAN/Tailscale
-          # connections can be dropped before they reach the socket.
-          sed -i '' 's/GENERATE_INFOPLIST_FILE: YES/GENERATE_INFOPLIST_FILE: YES\\n        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "Allow authenticated remote control over the local network or Tailscale."/' project.yml
-          sed -i '' '/GENERATE_INFOPLIST_FILE = YES;/a\\                INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Allow authenticated remote control over the local network or Tailscale.";' IPhoneUseRunner.xcodeproj/project.pbxproj
-          grep -n 'NSLocalNetworkUsageDescription' project.yml IPhoneUseRunner.xcodeproj/project.pbxproj
-
       - name: Build unsigned XCTest runner
         working-directory: iphone-use/runner/IPhoneUseRunner
         run: |
@@ -55,6 +43,8 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string Allow authenticated remote control over the local network or Tailscale.' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist"
           test -f "$APP_PATH/iPhoneUse-Runner"
           test -f "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
