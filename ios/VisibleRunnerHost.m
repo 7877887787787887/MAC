@@ -1,7 +1,14 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
-#include <stdlib.h>
+#include <arpa/inet.h>
+#include <errno.h>
+#include <netinet/in.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+static const uint16_t IPUPairingRelayPort = 12005;
 
 static BOOL IPUHasXCTestLaunchEnvironment(void) {
     NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
@@ -25,6 +32,100 @@ static void *IPUOpenXCTest(void) {
         NSLog(@"ipu-visible-host: dlopen %s failed: %s", paths[i], dlerror());
     }
     return NULL;
+}
+
+static BOOL IPUSendAll(int fd, const uint8_t *bytes, size_t length) {
+    size_t sent = 0;
+    while (sent < length) {
+        ssize_t count = send(fd, bytes + sent, length - sent, 0);
+        if (count <= 0) return NO;
+        sent += (size_t)count;
+    }
+    return YES;
+}
+
+static int IPUConnectLocalRemotePairing(void) {
+    for (uint16_t port = 49152; port <= 49167; port++) {
+        int fd = socket(AF_INET, SOCK_STREAM, 0);
+        if (fd < 0) continue;
+        int yes = 1;
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+        struct sockaddr_in target = {0};
+        target.sin_len = sizeof(target);
+        target.sin_family = AF_INET;
+        target.sin_port = htons(port);
+        target.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (connect(fd, (struct sockaddr *)&target, sizeof(target)) == 0) {
+            NSLog(@"ipu-visible-host: pairing relay connected to loopback:%u", port);
+            return fd;
+        }
+        close(fd);
+    }
+    return -1;
+}
+
+static void IPURelayConnection(int client) {
+    int upstream = IPUConnectLocalRemotePairing();
+    if (upstream < 0) {
+        NSLog(@"ipu-visible-host: no local RemotePairing service on 49152-49167");
+        close(client);
+        return;
+    }
+    uint8_t buffer[65536];
+    while (1) {
+        fd_set reads;
+        FD_ZERO(&reads);
+        FD_SET(client, &reads);
+        FD_SET(upstream, &reads);
+        int highest = MAX(client, upstream);
+        int result = select(highest + 1, &reads, NULL, NULL, NULL);
+        if (result <= 0) break;
+        int source = FD_ISSET(client, &reads) ? client : upstream;
+        int destination = source == client ? upstream : client;
+        ssize_t count = recv(source, buffer, sizeof(buffer), 0);
+        if (count <= 0 || !IPUSendAll(destination, buffer, (size_t)count)) break;
+    }
+    close(upstream);
+    close(client);
+    NSLog(@"ipu-visible-host: pairing relay connection closed");
+}
+
+static void IPUStartPairingRelay(void) {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        int server = socket(AF_INET6, SOCK_STREAM, 0);
+        if (server < 0) {
+            NSLog(@"ipu-visible-host: relay socket failed errno=%d", errno);
+            return;
+        }
+        int yes = 1;
+        int no = 0;
+        setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+        setsockopt(server, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+        setsockopt(server, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+        struct sockaddr_in6 address = {0};
+        address.sin6_len = sizeof(address);
+        address.sin6_family = AF_INET6;
+        address.sin6_port = htons(IPUPairingRelayPort);
+        address.sin6_addr = in6addr_any;
+        if (bind(server, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(server, 4) != 0) {
+            NSLog(@"ipu-visible-host: relay bind/listen failed errno=%d", errno);
+            close(server);
+            return;
+        }
+        NSLog(@"ipu-visible-host: pairing relay listening on %u", IPUPairingRelayPort);
+        while (1) {
+            int client = accept(server, NULL, NULL);
+            if (client < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+            dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                IPURelayConnection(client);
+            });
+        }
+        close(server);
+    });
 }
 
 @interface IPUVisibleHostDelegate : UIResponder <UIApplicationDelegate, NSNetServiceBrowserDelegate>
@@ -52,8 +153,8 @@ static void *IPUOpenXCTest(void) {
     status.textAlignment = NSTextAlignmentCenter;
     status.numberOfLines = 0;
     status.text = IPUHasXCTestLaunchEnvironment()
-        ? @"Starting the authenticated control and video services…"
-        : @"Installed and ready. Keep this app installed. Start it from the paired Windows automation host to open ports 8100 and 9100.";
+        ? @"Starting authenticated control and video services…"
+        : @"Pairing relay active on port 12005. Keep this screen open while the Windows host completes secure pairing.";
 
     [controller.view addSubview:title];
     [controller.view addSubview:status];
@@ -69,6 +170,7 @@ static void *IPUOpenXCTest(void) {
     self.window.rootViewController = controller;
     [self.window makeKeyAndVisible];
     [self startLocalNetworkProbe];
+    IPUStartPairingRelay();
 
     if (IPUHasXCTestLaunchEnvironment()) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -82,7 +184,7 @@ static void *IPUOpenXCTest(void) {
             xctestMain(nil);
         });
     } else {
-        NSLog(@"ipu-visible-host: normal launch; waiting for an XCTest host session");
+        NSLog(@"ipu-visible-host: normal launch; pairing relay ready");
     }
     return YES;
 }
