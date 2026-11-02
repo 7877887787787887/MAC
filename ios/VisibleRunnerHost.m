@@ -1,6 +1,5 @@
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
-#import <QuartzCore/QuartzCore.h>
 #include <dlfcn.h>
 #include <arpa/inet.h>
 #include <errno.h>
@@ -357,9 +356,6 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
     halo.center = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds) - 132.0);
     halo.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin |
                             UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-    halo.layer.cornerRadius = 48.0;
-    halo.layer.borderWidth = 2.0;
-    halo.layer.borderColor = [UIColor colorWithRed:0.20 green:0.72 blue:1.0 alpha:0.95].CGColor;
     halo.backgroundColor = [UIColor colorWithRed:0.04 green:0.18 blue:0.28 alpha:0.65];
     halo.accessibilityLabel = @"Device Linked";
     [view addSubview:halo];
