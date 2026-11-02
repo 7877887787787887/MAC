@@ -40,17 +40,26 @@ jobs:
       - name: Package unsigned IPA
         working-directory: iphone-use/runner/IPhoneUseRunner
         run: |
-          APP_PATH="$(find build/Build/Products -type d -name 'IPhoneUseRunner-Runner.app' -print -quit)"
+          APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
+          test -f "$APP_PATH/Info.plist"
+          test -f "$APP_PATH/iPhoneUse-Runner"
+          test -f "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
+          lipo -verify_arch arm64 "$APP_PATH/iPhoneUse-Runner"
+          lipo -verify_arch arm64 "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
           mkdir -p export/Payload
           cp -R "$APP_PATH" export/Payload/
           cd export
           zip -qry iphone-use-runner-high-quality-unsigned.ipa Payload
+          unzip -tq iphone-use-runner-high-quality-unsigned.ipa
           shasum -a 256 iphone-use-runner-high-quality-unsigned.ipa > iphone-use-runner-high-quality-unsigned.ipa.sha256
+          shasum -a 256 -c iphone-use-runner-high-quality-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
+          if-no-files-found: error
           name: iphone-use-runner-high-quality-v0.27.34
           path: |
             iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-high-quality-unsigned.ipa
