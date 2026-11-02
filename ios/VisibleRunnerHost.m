@@ -335,7 +335,10 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
     IPUStartReverseServiceRelay(9100, 19100);
 
     if (IPUHasXCTestLaunchEnvironment()) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+        // XCTest owns a long-lived nested run loop. Enter it from the run loop,
+        // not a main-dispatch block: HTTP handlers synchronously dispatch UI
+        // work to the main queue, which cannot drain until that block returns.
+        CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{
             void *handle = IPUOpenXCTest();
             void (*xctestMain)(id) = handle ? (void (*)(id))dlsym(handle, "_XCTestMain") : NULL;
             if (!xctestMain) {
