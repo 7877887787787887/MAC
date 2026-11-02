@@ -43,6 +43,7 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist" || true
           /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string Allow authenticated remote control over the local network or Tailscale.' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist"
           test -f "$APP_PATH/iPhoneUse-Runner"
