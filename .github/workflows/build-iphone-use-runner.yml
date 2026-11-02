@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           file=runner/IPhoneUseRunner/IPhoneUseRunnerUITests/RunnerH264.swift
           sed -i '' 's/var fps = 30/var fps = 60/' "$file"
-          sed -i '' 's/var scalePercent = 50/var scalePercent = 75/' "$file"
+          sed -i '' 's/var scalePercent = [0-9][0-9]*/var scalePercent = 50/' "$file"
           sed -i '' 's/var kbps = 1500/var kbps = 8000/' "$file"
           sed -i '' 's/var keyframeSeconds = 10.0/var keyframeSeconds = 2.0/' "$file"
           grep -nE 'var fps|scalePercent|var kbps|keyframeSeconds' "$file"
@@ -53,8 +53,19 @@ jobs:
             -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
             ../../../custom-build/ios/VisibleRunnerHost.m \
             -framework UIKit -framework Foundation -framework CoreGraphics \
+            -framework AVFoundation -framework CoreMedia -framework QuartzCore \
             -o "$APP_PATH/iPhoneUseRemote"
           chmod +x "$APP_PATH/iPhoneUseRemote"
+          STARTUP_VIDEO="../../../custom-build/ios/assets/device-linked.mp4"
+          if [ -f "$STARTUP_VIDEO" ]; then
+            cp "$STARTUP_VIDEO" "$APP_PATH/device-linked.mp4"
+          else
+            echo "Startup video missing; the host will use its bounded UIKit animation."
+          fi
+          /usr/libexec/PlistBuddy -c 'Add :UIViewControllerBasedStatusBarAppearance bool true' "$APP_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c 'Set :UIViewControllerBasedStatusBarAppearance true' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :UIStatusBarHidden bool true' "$APP_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c 'Set :UIStatusBarHidden true' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable iPhoneUseRemote' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string iPhone Use Remote' "$APP_PATH/Info.plist" || \
