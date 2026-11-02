@@ -46,8 +46,8 @@ jobs:
           test -f "$APP_PATH/iPhoneUse-Runner"
           test -f "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
-          lipo -verify_arch arm64 "$APP_PATH/iPhoneUse-Runner"
-          lipo -verify_arch arm64 "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
+          lipo "$APP_PATH/iPhoneUse-Runner" -verify_arch arm64
+          lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
           cp -R "$APP_PATH" export/Payload/
           cd export
