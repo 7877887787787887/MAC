@@ -1,4 +1,4 @@
-name: Build iPhone-use low-latency unsigned runner IPA
+name: Build iPhone-use lowest-latency unsigned runner IPA
 
 on:
   workflow_dispatch:
@@ -20,16 +20,17 @@ jobs:
           ref: v0.27.34
           path: iphone-use
 
-      - name: Tune runner for low latency
+      - name: Tune runner for lowest latency
         working-directory: iphone-use
         shell: bash
         run: |
           set -euo pipefail
           file=runner/IPhoneUseRunner/IPhoneUseRunnerUITests/RunnerH264.swift
           sed -i '' 's/var fps = 30/var fps = 60/' "$file"
-          sed -i '' 's/var kbps = 1500/var kbps = 4000/' "$file"
-          sed -i '' 's/var keyframeSeconds = 10.0/var keyframeSeconds = 2.0/' "$file"
-          grep -nE 'var fps|var kbps|keyframeSeconds' "$file"
+          sed -i '' 's/var scalePercent = 50/var scalePercent = 40/' "$file"
+          sed -i '' 's/var kbps = 1500/var kbps = 2000/' "$file"
+          sed -i '' 's/var keyframeSeconds = 10.0/var keyframeSeconds = 1.0/' "$file"
+          grep -nE 'var fps|scalePercent|var kbps|keyframeSeconds' "$file"
 
       - name: Build unsigned XCTest runner
         working-directory: iphone-use/runner/IPhoneUseRunner
@@ -44,13 +45,13 @@ jobs:
           mkdir -p export/Payload
           cp -R "$APP_PATH" export/Payload/
           cd export
-          zip -qry iphone-use-runner-low-latency-unsigned.ipa Payload
-          shasum -a 256 iphone-use-runner-low-latency-unsigned.ipa > iphone-use-runner-low-latency-unsigned.ipa.sha256
+          zip -qry iphone-use-runner-lowest-latency-unsigned.ipa Payload
+          shasum -a 256 iphone-use-runner-lowest-latency-unsigned.ipa > iphone-use-runner-lowest-latency-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: iphone-use-runner-low-latency-v0.27.34
+          name: iphone-use-runner-lowest-latency-v0.27.34
           path: |
-            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-low-latency-unsigned.ipa
-            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-low-latency-unsigned.ipa.sha256
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-lowest-latency-unsigned.ipa
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-lowest-latency-unsigned.ipa.sha256
