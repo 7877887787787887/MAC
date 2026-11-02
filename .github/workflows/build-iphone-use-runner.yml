@@ -1,0 +1,45 @@
+name: Build iPhone-use unsigned runner IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-runner:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout runner source
+        uses: actions/checkout@v4
+        with:
+          repository: leeguooooo/iphone-use
+          ref: v0.27.34
+          path: iphone-use
+
+      - name: Build unsigned XCTest runner
+        working-directory: iphone-use/runner/IPhoneUseRunner
+        run: |
+          xcodebuild build-for-testing             -project IPhoneUseRunner.xcodeproj             -scheme IPhoneUseRunner             -configuration Release             -destination 'generic/platform=iOS'             -derivedDataPath build             CODE_SIGN_IDENTITY=""             CODE_SIGNING_REQUIRED=NO             CODE_SIGNING_ALLOWED=NO             IPHONEOS_DEPLOYMENT_TARGET=16.0
+
+      - name: Package unsigned IPA
+        working-directory: iphone-use/runner/IPhoneUseRunner
+        run: |
+          APP_PATH="$(find build/Build/Products -type d -name 'IPhoneUseRunner-Runner.app' -print -quit)"
+          test -n "$APP_PATH"
+          mkdir -p export/Payload
+          cp -R "$APP_PATH" export/Payload/
+          cd export
+          zip -qry iphone-use-runner-unsigned.ipa Payload
+          shasum -a 256 iphone-use-runner-unsigned.ipa > iphone-use-runner-unsigned.ipa.sha256
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iphone-use-runner-unsigned-v0.27.34
+          path: |
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-unsigned.ipa
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-unsigned.ipa.sha256
