@@ -220,6 +220,70 @@ static void IPUStartReverseLockdownRelay(void) {
     });
 }
 
+static int IPUConnectLocalService(uint16_t port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+    struct sockaddr_in target = {0};
+    target.sin_len = sizeof(target);
+    target.sin_family = AF_INET;
+    target.sin_port = htons(port);
+    target.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(fd, (struct sockaddr *)&target, sizeof(target)) == 0) return fd;
+    close(fd);
+    return -1;
+}
+
+static void IPURelayExistingService(int bridge, uint16_t localPort) {
+    int upstream = IPUConnectLocalService(localPort);
+    if (upstream < 0) {
+        close(bridge);
+        return;
+    }
+    NSLog(@"ipu-visible-host: relaying local port %u", localPort);
+    uint8_t buffer[65536];
+    while (1) {
+        fd_set reads;
+        FD_ZERO(&reads);
+        FD_SET(bridge, &reads);
+        FD_SET(upstream, &reads);
+        int highest = MAX(bridge, upstream);
+        int result = select(highest + 1, &reads, NULL, NULL, NULL);
+        if (result <= 0) break;
+        int source = FD_ISSET(bridge, &reads) ? bridge : upstream;
+        int destination = source == bridge ? upstream : bridge;
+        ssize_t count = recv(source, buffer, sizeof(buffer), 0);
+        if (count <= 0 || !IPUSendAll(destination, buffer, (size_t)count)) break;
+    }
+    close(upstream);
+    close(bridge);
+}
+
+static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort) {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        while (1) {
+            int bridge = socket(AF_INET, SOCK_STREAM, 0);
+            if (bridge >= 0) {
+                int yes = 1;
+                setsockopt(bridge, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+                struct sockaddr_in windows = {0};
+                windows.sin_len = sizeof(windows);
+                windows.sin_family = AF_INET;
+                windows.sin_port = htons(windowsPort);
+                inet_pton(AF_INET, "100.114.29.8", &windows.sin_addr);
+                if (connect(bridge, (struct sockaddr *)&windows, sizeof(windows)) == 0) {
+                    IPURelayExistingService(bridge, localPort);
+                    sleep(1);
+                    continue;
+                }
+                close(bridge);
+            }
+            sleep(2);
+        }
+    });
+}
+
 @interface IPUVisibleHostDelegate : UIResponder <UIApplicationDelegate, NSNetServiceBrowserDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) NSNetServiceBrowser *browser;
@@ -246,7 +310,7 @@ static void IPUStartReverseLockdownRelay(void) {
     status.numberOfLines = 0;
     status.text = IPUHasXCTestLaunchEnvironment()
         ? @"Starting authenticated control and video services…"
-        : @"Secure pairing and trusted-device relays are connecting to the Windows host. Keep this screen open while secure pairing completes.";
+        : @"Control, video, and secure-pairing relays are connecting to the Windows host. Keep this screen open while secure pairing completes.";
 
     [controller.view addSubview:title];
     [controller.view addSubview:status];
@@ -265,6 +329,8 @@ static void IPUStartReverseLockdownRelay(void) {
     IPUStartPairingRelay();
     IPUStartReversePairingRelay();
     IPUStartReverseLockdownRelay();
+    IPUStartReverseServiceRelay(8100, 18100);
+    IPUStartReverseServiceRelay(9100, 19100);
 
     if (IPUHasXCTestLaunchEnvironment()) {
         dispatch_async(dispatch_get_main_queue(), ^{
