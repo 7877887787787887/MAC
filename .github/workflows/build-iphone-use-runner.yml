@@ -65,8 +65,12 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Delete :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist" || true
           /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string Allow authenticated remote control over the local network or Tailscale.' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist"
+          EXT_PATH="$APP_PATH/PlugIns/iPhoneUse.xctest"
+          test -f "$EXT_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.iPhoneUse' "$EXT_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXT_PATH/Info.plist"
           test -f "$APP_PATH/iPhoneUseRemote"
-          test -f "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
+          test -f "$EXT_PATH/iPhoneUse"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
           lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
