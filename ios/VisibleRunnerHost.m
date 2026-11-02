@@ -287,6 +287,7 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
 @interface IPUVisibleHostDelegate : UIResponder <UIApplicationDelegate, NSNetServiceBrowserDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) NSNetServiceBrowser *browser;
+- (void)startDeviceLinkedAnimationWithTitle:(UILabel *)title status:(UILabel *)status;
 @end
 
 @implementation IPUVisibleHostDelegate
