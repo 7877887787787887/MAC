@@ -50,7 +50,7 @@ jobs:
           test -f "$APP_PATH/Info.plist"
           xcrun --sdk iphoneos clang \
             -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
-            custom-build/ios/VisibleRunnerHost.m \
+            ../../../custom-build/ios/VisibleRunnerHost.m \
             -framework UIKit -framework Foundation \
             -o "$APP_PATH/iPhoneUseRemote"
           chmod +x "$APP_PATH/iPhoneUseRemote"
