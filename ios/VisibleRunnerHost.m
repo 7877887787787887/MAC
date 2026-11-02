@@ -92,21 +92,19 @@ static void IPURelayConnection(int client) {
 
 static void IPUStartPairingRelay(void) {
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        int server = socket(AF_INET6, SOCK_STREAM, 0);
+        int server = socket(AF_INET, SOCK_STREAM, 0);
         if (server < 0) {
             NSLog(@"ipu-visible-host: relay socket failed errno=%d", errno);
             return;
         }
         int yes = 1;
-        int no = 0;
         setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
         setsockopt(server, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
-        setsockopt(server, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
-        struct sockaddr_in6 address = {0};
-        address.sin6_len = sizeof(address);
-        address.sin6_family = AF_INET6;
-        address.sin6_port = htons(IPUPairingRelayPort);
-        address.sin6_addr = in6addr_any;
+        struct sockaddr_in address = {0};
+        address.sin_len = sizeof(address);
+        address.sin_family = AF_INET;
+        address.sin_port = htons(IPUPairingRelayPort);
+        address.sin_addr.s_addr = htonl(INADDR_ANY);
         if (bind(server, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(server, 4) != 0) {
             NSLog(@"ipu-visible-host: relay bind/listen failed errno=%d", errno);
             close(server);
@@ -125,6 +123,31 @@ static void IPUStartPairingRelay(void) {
             });
         }
         close(server);
+    });
+}
+
+static void IPUStartReversePairingRelay(void) {
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        while (1) {
+            int bridge = socket(AF_INET, SOCK_STREAM, 0);
+            if (bridge >= 0) {
+                int yes = 1;
+                setsockopt(bridge, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+                struct sockaddr_in windows = {0};
+                windows.sin_len = sizeof(windows);
+                windows.sin_family = AF_INET;
+                windows.sin_port = htons(IPUPairingRelayPort);
+                inet_pton(AF_INET, "100.114.29.8", &windows.sin_addr);
+                if (connect(bridge, (struct sockaddr *)&windows, sizeof(windows)) == 0) {
+                    NSLog(@"ipu-visible-host: reverse pairing relay connected to Windows");
+                    IPURelayConnection(bridge);
+                    sleep(1);
+                    continue;
+                }
+                close(bridge);
+            }
+            sleep(2);
+        }
     });
 }
 
@@ -154,7 +177,7 @@ static void IPUStartPairingRelay(void) {
     status.numberOfLines = 0;
     status.text = IPUHasXCTestLaunchEnvironment()
         ? @"Starting authenticated control and video services…"
-        : @"Pairing relay active on port 12005. Keep this screen open while the Windows host completes secure pairing.";
+        : @"Pairing relay is connecting to the Windows host. Keep this screen open while secure pairing completes.";
 
     [controller.view addSubview:title];
     [controller.view addSubview:status];
@@ -171,6 +194,7 @@ static void IPUStartPairingRelay(void) {
     [self.window makeKeyAndVisible];
     [self startLocalNetworkProbe];
     IPUStartPairingRelay();
+    IPUStartReversePairingRelay();
 
     if (IPUHasXCTestLaunchEnvironment()) {
         dispatch_async(dispatch_get_main_queue(), ^{
