@@ -287,7 +287,6 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
 @interface IPUVisibleHostDelegate : UIResponder <UIApplicationDelegate, NSNetServiceBrowserDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) NSNetServiceBrowser *browser;
-@property(nonatomic, strong) UIView *linkAnimation;
 @end
 
 @implementation IPUVisibleHostDelegate
@@ -326,7 +325,7 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
     self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     self.window.rootViewController = controller;
     [self.window makeKeyAndVisible];
-    [self startDeviceLinkedAnimationInView:controller.view];
+    [self startDeviceLinkedAnimationWithTitle:title status:status];
     [self startLocalNetworkProbe];
     IPUStartPairingRelay();
     IPUStartReversePairingRelay();
@@ -351,29 +350,20 @@ static void IPUStartReverseServiceRelay(uint16_t localPort, uint16_t windowsPort
     return YES;
 }
 
-- (void)startDeviceLinkedAnimationInView:(UIView *)view {
-    UIView *halo = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 96, 96)];
-    halo.center = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds) - 132.0);
-    halo.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin |
-                            UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleBottomMargin;
-    halo.backgroundColor = [UIColor colorWithRed:0.04 green:0.18 blue:0.28 alpha:0.65];
-    halo.accessibilityLabel = @"Device Linked";
-    [view addSubview:halo];
-    self.linkAnimation = halo;
-
-    [UIView animateWithDuration:0.9 delay:0.0 options:UIViewAnimationOptionAutoreverse |
+- (void)startDeviceLinkedAnimationWithTitle:(UILabel *)title status:(UILabel *)status {
+    title.text = @"Device Linked";
+    status.text = @"Starting authenticated control and video services…";
+    title.transform = CGAffineTransformMakeScale(0.92, 0.92);
+    title.alpha = 0.45;
+    [UIView animateWithDuration:0.65 delay:0.0 options:UIViewAnimationOptionAutoreverse |
         UIViewAnimationOptionRepeat | UIViewAnimationOptionAllowUserInteraction animations:^{
-        halo.transform = CGAffineTransformMakeScale(1.22, 1.22);
-        halo.alpha = 0.58;
+        title.transform = CGAffineTransformMakeScale(1.04, 1.04);
+        title.alpha = 1.0;
     } completion:nil];
-
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [UIView animateWithDuration:0.25 animations:^{
-            halo.alpha = 0.0;
-            halo.transform = CGAffineTransformMakeScale(1.35, 1.35);
-        } completion:^(BOOL finished) {
-            [halo removeFromSuperview];
-            if (self.linkAnimation == halo) self.linkAnimation = nil;
+            title.alpha = 1.0;
+            status.alpha = 1.0;
         }];
     });
 }
