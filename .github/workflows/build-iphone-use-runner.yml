@@ -13,6 +13,11 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
+      - name: Checkout visible host source
+        uses: actions/checkout@v4
+        with:
+          path: custom-build
+
       - name: Checkout runner source
         uses: actions/checkout@v4
         with:
@@ -43,27 +48,40 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
+          xcrun --sdk iphoneos clang \
+            -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
+            custom-build/ios/VisibleRunnerHost.m \
+            -framework UIKit -framework Foundation \
+            -o "$APP_PATH/iPhoneUseRemote"
+          chmod +x "$APP_PATH/iPhoneUseRemote"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable iPhoneUseRemote' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string iPhone Use Remote' "$APP_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName iPhone Use Remote' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Delete :NSBonjourServices' "$APP_PATH/Info.plist" || true
+          /usr/libexec/PlistBuddy -c 'Add :NSBonjourServices array' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :NSBonjourServices:0 string _iphoneuse._tcp' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist" || true
           /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string Allow authenticated remote control over the local network or Tailscale.' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :NSLocalNetworkUsageDescription' "$APP_PATH/Info.plist"
-          test -f "$APP_PATH/iPhoneUse-Runner"
+          test -f "$APP_PATH/iPhoneUseRemote"
           test -f "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
-          lipo "$APP_PATH/iPhoneUse-Runner" -verify_arch arm64
+          lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
           cp -R "$APP_PATH" export/Payload/
           cd export
-          zip -qry iphone-use-runner-high-quality-unsigned.ipa Payload
-          unzip -tq iphone-use-runner-high-quality-unsigned.ipa
-          shasum -a 256 iphone-use-runner-high-quality-unsigned.ipa > iphone-use-runner-high-quality-unsigned.ipa.sha256
-          shasum -a 256 -c iphone-use-runner-high-quality-unsigned.ipa.sha256
+          zip -qry iphone-use-visible-runner-unsigned.ipa Payload
+          unzip -tq iphone-use-visible-runner-unsigned.ipa
+          shasum -a 256 iphone-use-visible-runner-unsigned.ipa > iphone-use-visible-runner-unsigned.ipa.sha256
+          shasum -a 256 -c iphone-use-visible-runner-unsigned.ipa.sha256
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
-          name: iphone-use-runner-high-quality-v0.27.34
+          name: iphone-use-visible-runner-v0.27.34
           path: |
-            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-high-quality-unsigned.ipa
-            iphone-use/runner/IPhoneUseRunner/export/iphone-use-runner-high-quality-unsigned.ipa.sha256
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa
+            iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa.sha256
