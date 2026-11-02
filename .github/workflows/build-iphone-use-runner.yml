@@ -51,7 +51,7 @@ jobs:
           xcrun --sdk iphoneos clang \
             -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
             ../../../custom-build/ios/VisibleRunnerHost.m \
-            -framework UIKit -framework Foundation \
+            -framework UIKit -framework Foundation -framework QuartzCore \
             -o "$APP_PATH/iPhoneUseRemote"
           chmod +x "$APP_PATH/iPhoneUseRemote"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable iPhoneUseRemote' "$APP_PATH/Info.plist"
