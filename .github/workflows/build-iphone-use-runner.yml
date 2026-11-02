@@ -49,7 +49,7 @@ jobs:
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
           xcrun --sdk iphoneos clang \
-            -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
+            -fobjc-arc -fblocks -ObjC -arch arm64 -miphoneos-version-min=16.0 \
             ../../../custom-build/ios/VisibleRunnerHost.m \
             -framework UIKit -framework Foundation -framework QuartzCore \
             -o "$APP_PATH/iPhoneUseRemote"
