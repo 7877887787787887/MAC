@@ -2,13 +2,15 @@ import UIKit
 import Foundation
 import Darwin
 
-private let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
-private let pairingPort: UInt16 = 12005
+private enum RelayConfig {
+    static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
+    static let pairingPort: UInt16 = 12005
+}
 
 private func hosts() -> [String] {
     let value = ProcessInfo.processInfo.environment["IPU_WINDOWS_HOSTS"] ?? ""
     let parsed = value.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-    return parsed.isEmpty ? defaultHosts : parsed
+    return parsed.isEmpty ? RelayConfig.defaultHosts : parsed
 }
 private func log(_ s: String) { NSLog("ipu-visible-host-swift: %@", s) }
 private func tune(_ fd: Int32) {
@@ -34,9 +36,9 @@ private func dial(_ host: String, _ port: UInt16, _ seconds: TimeInterval = 2.5)
         _ = fcntl(fd, F_SETFL, old); return fd
     }
     guard errno == EINPROGRESS else { close(fd); return -1 }
-    var set = fd_set(); FD_ZERO(&set); FD_SET(fd, &set)
-    var timeout = timeval(tv_sec: Int(seconds), tv_usec: Int32((seconds - floor(seconds)) * 1_000_000))
-    guard select(fd + 1, nil, &set, nil, &timeout) > 0 else { close(fd); return -1 }
+    var descriptor = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+    let milliseconds = Int32(max(1, Int(seconds * 1_000)))
+    guard Darwin.poll(&descriptor, 1, milliseconds) > 0 else { close(fd); return -1 }
     var errorCode: Int32 = 0; var length = socklen_t(MemoryLayout<Int32>.size)
     getsockopt(fd, SOL_SOCKET, SO_ERROR, &errorCode, &length)
     guard errorCode == 0 else { close(fd); return -1 }
@@ -68,9 +70,13 @@ private func sendAll(_ fd: Int32, _ pointer: UnsafeRawPointer, _ count: Int) -> 
 private func relay(_ a: Int32, _ b: Int32) {
     var buffer = [UInt8](repeating: 0, count: 65536)
     while true {
-        var set = fd_set(); FD_ZERO(&set); FD_SET(a, &set); FD_SET(b, &set)
-        guard select(max(a, b) + 1, &set, nil, nil, nil) > 0 else { break }
-        let source = FD_ISSET(a, &set) ? a : b
+        var descriptors = [
+            pollfd(fd: a, events: Int16(POLLIN), revents: 0),
+            pollfd(fd: b, events: Int16(POLLIN), revents: 0)
+        ]
+        guard Darwin.poll(&descriptors, 2, -1) > 0 else { break }
+        let mask = Int16(POLLIN | POLLHUP | POLLERR)
+        let source = (descriptors[0].revents & mask) != 0 ? a : b
         let destination = source == a ? b : a
         let count = buffer.withUnsafeMutableBytes { recv(source, $0.baseAddress, $0.count, 0) }
         guard count > 0, buffer.withUnsafeBytes({ sendAll(destination, $0.baseAddress!, count) }) else { break }
@@ -82,10 +88,10 @@ private func startInboundPairing() {
         let server = socket(AF_INET, SOCK_STREAM, 0); guard server >= 0 else { return }; tune(server)
         var one: Int32 = 1; setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &one, socklen_t(MemoryLayout<Int32>.size))
         var a = sockaddr_in(); a.sin_len = UInt8(MemoryLayout<sockaddr_in>.size); a.sin_family = sa_family_t(AF_INET)
-        a.sin_port = pairingPort.bigEndian; a.sin_addr = in_addr(s_addr: INADDR_ANY)
+        a.sin_port = RelayConfig.pairingPort.bigEndian; a.sin_addr = in_addr(s_addr: INADDR_ANY)
         let bound = withUnsafePointer(to: &a) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.bind(server, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) } }
         guard bound == 0, listen(server, 8) == 0 else { close(server); log("pairing bind/listen failed"); return }
-        log("pairing relay listening on \(pairingPort)")
+        log("pairing relay listening on \(RelayConfig.pairingPort)")
         while true {
             let client = accept(server, nil, nil); if client < 0 { if errno == EINTR { continue }; break }; tune(client)
             DispatchQueue.global(qos: .userInitiated).async {
@@ -103,7 +109,7 @@ private func startReverse(localPort: UInt16?, remotePort: UInt16) {
             for host in hosts() {
                 let bridge = dial(host, remotePort); if bridge < 0 { continue }
                 worked = true; delay = 1; log("connected to \(host):\(remotePort)")
-                let upstream: Int32 = localPort == nil ? (remotePort == pairingPort ? pairingUpstream() : loopback(62078)) : loopback(localPort!)
+                let upstream: Int32 = localPort == nil ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078)) : loopback(localPort!)
                 if upstream >= 0 { relay(bridge, upstream) } else { close(bridge); log("local upstream unavailable") }
                 break
             }
@@ -116,8 +122,7 @@ private final class HostController: UIViewController {
     var starting = true
     override var prefersStatusBarHidden: Bool { starting }
 }
-@UIApplicationMain
-private final class AppDelegate: UIResponder, UIApplicationDelegate {
+final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         let vc = HostController(); vc.view.backgroundColor = UIColor(red: 0.035, green: 0.047, blue: 0.071, alpha: 1)
@@ -131,4 +136,12 @@ private final class AppDelegate: UIResponder, UIApplicationDelegate {
         log("normal launch; Swift relay host ready"); return true
     }
     func applicationDidEnterBackground(_ application: UIApplication) { (window?.rootViewController as? HostController)?.starting = false }
+}
+
+
+@main
+struct VisibleHostMain {
+    static func main() {
+        _ = UIApplicationMain(CommandLine.argc, CommandLine.unsafeArgv, nil, NSStringFromClass(AppDelegate.self))
+    }
 }
