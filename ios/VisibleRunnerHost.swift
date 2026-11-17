@@ -140,19 +140,42 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     var healthLabel: UILabel?
     var healthTimer: Timer?
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-        let vc = HostController(); vc.view.backgroundColor = UIColor(red: 0.035, green: 0.047, blue: 0.071, alpha: 1)
-        let title = UILabel(); title.translatesAutoresizingMaskIntoConstraints = false; title.text = "Connecting to Windows"; title.textColor = .white; title.font = .boldSystemFont(ofSize: 28); title.textAlignment = .center
-        let status = UILabel(); status.translatesAutoresizingMaskIntoConstraints = false; status.text = "Control, video, and secure-pairing relays are connecting to the Windows host. Keep this screen open while secure pairing completes."; status.textColor = UIColor(white: 0.82, alpha: 1); status.font = .systemFont(ofSize: 17); status.numberOfLines = 0; status.textAlignment = .center
-        vc.view.addSubview(title); vc.view.addSubview(status)
-        healthLabel = status
-        NSLayoutConstraint.activate([title.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor), title.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor, constant: -50), status.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 24), status.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor, constant: 28), status.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor, constant: -28)])
+        // Keep the relay visually quiet: no persistent status overlay or popup.
+        // Continuous socket service still requires the app to remain active under iOS lifecycle rules.
+        let vc = HostController(); vc.view.backgroundColor = .black
         let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = vc; w.makeKeyAndVisible(); window = w
         startInboundPairing(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
         healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.healthLabel?.text = RelayHealth.shared.summary() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { vc.starting = false; vc.setNeedsStatusBarAppearanceUpdate() }
         log("normal launch; Swift relay host ready"); return true
     }
-    func applicationDidEnterBackground(_ application: UIApplication) { (window?.rootViewController as? HostController)?.starting = false }
+    private var backgroundLease: UIBackgroundTaskIdentifier = .invalid
+    private func requestShortBackgroundLease(_ application: UIApplication) {
+        guard backgroundLease == .invalid else { return }
+        backgroundLease = application.beginBackgroundTask(withName: "relay-grace-period") { [weak self] in
+            guard let self else { return }
+            if self.backgroundLease != .invalid {
+                application.endBackgroundTask(self.backgroundLease)
+                self.backgroundLease = .invalid
+            }
+        }
+        // iOS grants only a bounded grace period; this is not an indefinite background server.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
+            guard let self, self.backgroundLease != .invalid else { return }
+            application.endBackgroundTask(self.backgroundLease)
+            self.backgroundLease = .invalid
+        }
+    }
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        (window?.rootViewController as? HostController)?.starting = false
+        requestShortBackgroundLease(application)
+    }
+    func applicationWillEnterForeground(_ application: UIApplication) {
+        if backgroundLease != .invalid {
+            application.endBackgroundTask(backgroundLease)
+            backgroundLease = .invalid
+        }
+    }
 }
 
 
