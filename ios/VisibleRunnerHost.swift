@@ -19,8 +19,11 @@ private func tune(_ fd: Int32) {
 }
 private func dial(_ host: String, _ port: UInt16, _ seconds: TimeInterval = 2.5) -> Int32 {
     var hints = addrinfo(ai_flags: 0, ai_family: AF_INET, ai_socktype: SOCK_STREAM, ai_protocol: IPPROTO_TCP, ai_addrlen: 0, ai_canonname: nil, ai_addr: nil, ai_next: nil)
-    var list: UnsafeMutablePointer<addrinfo>?
-    guard getaddrinfo(host, String(port), &hints, &list) == 0, let info = list else { return -1 }
+    var result: UnsafeMutablePointer<addrinfo>?
+    let lookup: Int32 = host.withCString { hostPtr in
+        String(port).withCString { portPtr in getaddrinfo(hostPtr, portPtr, &hints, &result) }
+    }
+    guard lookup == 0, let info = result else { return -1 }
     defer { freeaddrinfo(info) }
     let fd = socket(AF_INET, SOCK_STREAM, 0)
     guard fd >= 0 else { return -1 }
