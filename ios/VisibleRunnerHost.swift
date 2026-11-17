@@ -13,6 +13,18 @@ private func hosts() -> [String] {
     return parsed.isEmpty ? RelayConfig.defaultHosts : parsed
 }
 private func log(_ s: String) { NSLog("ipu-visible-host-swift: %@", s) }
+private final class RelayHealth {
+    static let shared = RelayHealth()
+    private let lock = NSLock()
+    private var states: [String: String] = [:]
+    func set(_ key: String, _ value: String) {
+        lock.lock(); states[key] = value; lock.unlock()
+    }
+    func summary() -> String {
+        lock.lock(); defer { lock.unlock() }
+        return states.keys.sorted().compactMap { key in states[key].map { "\(key): \($0)" } }.joined(separator: "\n")
+    }
+}
 private func tune(_ fd: Int32) {
     var one: Int32 = 1
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
@@ -107,6 +119,7 @@ private func startReverse(localPort: UInt16?, remotePort: UInt16) {
         while true {
             var worked = false
             for host in hosts() {
+                RelayHealth.shared.set("\(remotePort)", "trying \(host)")
                 let bridge = dial(host, remotePort); if bridge < 0 { continue }
                 worked = true; delay = 1; log("connected to \(host):\(remotePort)")
                 let upstream: Int32 = localPort == nil ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078)) : loopback(localPort!)
@@ -124,14 +137,18 @@ private final class HostController: UIViewController {
 }
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
+    var healthLabel: UILabel?
+    var healthTimer: Timer?
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         let vc = HostController(); vc.view.backgroundColor = UIColor(red: 0.035, green: 0.047, blue: 0.071, alpha: 1)
         let title = UILabel(); title.translatesAutoresizingMaskIntoConstraints = false; title.text = "Connecting to Windows"; title.textColor = .white; title.font = .boldSystemFont(ofSize: 28); title.textAlignment = .center
         let status = UILabel(); status.translatesAutoresizingMaskIntoConstraints = false; status.text = "Control, video, and secure-pairing relays are connecting to the Windows host. Keep this screen open while secure pairing completes."; status.textColor = UIColor(white: 0.82, alpha: 1); status.font = .systemFont(ofSize: 17); status.numberOfLines = 0; status.textAlignment = .center
         vc.view.addSubview(title); vc.view.addSubview(status)
+        healthLabel = status
         NSLayoutConstraint.activate([title.centerXAnchor.constraint(equalTo: vc.view.centerXAnchor), title.centerYAnchor.constraint(equalTo: vc.view.centerYAnchor, constant: -50), status.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 24), status.leadingAnchor.constraint(equalTo: vc.view.leadingAnchor, constant: 28), status.trailingAnchor.constraint(equalTo: vc.view.trailingAnchor, constant: -28)])
         let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = vc; w.makeKeyAndVisible(); window = w
         startInboundPairing(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.healthLabel?.text = RelayHealth.shared.summary() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { vc.starting = false; vc.setNeedsStatusBarAppearanceUpdate() }
         log("normal launch; Swift relay host ready"); return true
     }
