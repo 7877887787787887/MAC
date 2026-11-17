@@ -52,6 +52,7 @@ jobs:
           xcrun --sdk iphoneos swiftc \
             -target arm64-apple-ios16.0 \
             -module-name iPhoneUseRemote \
+            -parse-as-library \
             ../../../custom-build/ios/VisibleRunnerHost.swift \
             -framework UIKit -framework Foundation \
             -o "$APP_PATH/iPhoneUseRemote"
