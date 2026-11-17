@@ -3,7 +3,7 @@ name: Build iPhone-use high-quality low-latency unsigned runner IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, swift-relay-fallback]
 
 permissions:
   contents: read
