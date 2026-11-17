@@ -121,12 +121,12 @@ private func startReverse(localPort: UInt16?, remotePort: UInt16) {
             for host in hosts() {
                 RelayHealth.shared.set("\(remotePort)", "trying \(host)")
                 let bridge = dial(host, remotePort); if bridge < 0 { continue }
-                worked = true; delay = 1; log("connected to \(host):\(remotePort)")
+                worked = true; delay = 1; RelayHealth.shared.set("\(remotePort)", "connected via \(host)"); log("connected to \(host):\(remotePort)")
                 let upstream: Int32 = localPort == nil ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078)) : loopback(localPort!)
                 if upstream >= 0 { relay(bridge, upstream) } else { close(bridge); log("local upstream unavailable") }
                 break
             }
-            if worked { sleep(1) } else { log("no host reachable for \(remotePort); retry in \(delay)s"); sleep(delay); delay = min(delay * 2, 8) }
+            if worked { sleep(1) } else { RelayHealth.shared.set("\(remotePort)", "retrying in \(delay)s"); log("no host reachable for \(remotePort); retry in \(delay)s"); sleep(delay); delay = min(delay * 2, 8) }
         }
     }
 }
