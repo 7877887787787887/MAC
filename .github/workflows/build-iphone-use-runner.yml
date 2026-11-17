@@ -3,7 +3,7 @@ name: Build iPhone-use high-quality low-latency unsigned runner IPA
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, swift-relay-fallback]
 
 permissions:
   contents: read
@@ -49,12 +49,14 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
-          xcrun --sdk iphoneos clang \
-            -fobjc-arc -arch arm64 -miphoneos-version-min=16.0 \
-            ../../../custom-build/ios/VisibleRunnerHost.m \
-            -framework UIKit -framework Foundation -framework CoreGraphics \
-            -framework AVFoundation -framework CoreMedia -framework QuartzCore \
+          xcrun --sdk iphoneos swiftc \
+            -target arm64-apple-ios16.0 \
+            -module-name iPhoneUseRemote \
+            ../../../custom-build/ios/VisibleRunnerHost.swift \
+            -framework UIKit -framework Foundation \
             -o "$APP_PATH/iPhoneUseRemote"
+          file "$APP_PATH/iPhoneUseRemote"
+          strings "$APP_PATH/iPhoneUseRemote" | grep -q 'ipu-visible-host-swift'
           chmod +x "$APP_PATH/iPhoneUseRemote"
           STARTUP_VIDEO="../../../custom-build/ios/assets/device-linked.mp4"
           if [ -f "$STARTUP_VIDEO" ]; then
