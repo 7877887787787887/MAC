@@ -1,7 +1,6 @@
 import UIKit
 import Foundation
 import Darwin
-import WebKit
 
 private enum RelayConfig {
     static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
@@ -237,7 +236,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             self?.runnerPromptPresented = false
             self?.requestAndPromptForRunner()
         })
-        alert.addAction(UIAlertAction(title: "WebKit Instructions", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: "Native Setup Guide", style: .default) { [weak self] _ in
             self?.runnerPromptPresented = false
             self?.presentWebKitInstructions()
         })
@@ -247,26 +246,45 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         presenter.present(alert, animated: true)
     }
 
-    private func presentWebKitInstructions() {
-        guard let url = URL(string: "https://appium.github.io/appium-xcuitest-driver/latest/guides/run-preinstalled-wda/") else { return }
+    private func presentNativeInstructions() {
         let page = UIViewController()
-        page.view.backgroundColor = .black
+        page.view.backgroundColor = .systemBackground
         page.title = "WebDriverAgent Setup"
-        let web = WKWebView(frame: page.view.bounds)
-        web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        page.view.addSubview(web)
         page.navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
             target: self,
-            action: #selector(dismissWebKitInstructions)
+            action: #selector(dismissNativeInstructions)
         )
+
+        let text = UITextView(frame: page.view.bounds)
+        text.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        text.backgroundColor = .systemBackground
+        text.textColor = .label
+        text.font = UIFont.preferredFont(forTextStyle: .body)
+        text.isEditable = false
+        text.isSelectable = true
+        text.contentInset = UIEdgeInsets(top: 24, left: 18, bottom: 24, right: 18)
+        text.text = """
+        Start WebDriverAgentRunner
+
+        1. Sign and install WebDriverAgentRunner.ipa.
+        2. Start WebDriverAgent with Appium, CoreDevice, or Xcode.
+        3. Keep the runner session active.
+        4. Return here and tap Retry.
+
+        The relay app cannot launch XCTest/WebDriverAgent by itself. This native guide is local and does not load a web page, so it opens immediately without WebKit lag.
+
+        Expected endpoints:
+        • WDA control: port 8100
+        • Screen stream: port 9100
+        """
+        page.view.addSubview(text)
+
         let nav = UINavigationController(rootViewController: page)
-        window?.rootViewController?.present(nav, animated: true) {
-            web.load(URLRequest(url: url))
-        }
+        window?.rootViewController?.present(nav, animated: true)
     }
 
-    @objc private func dismissWebKitInstructions() {
+    @objc private func dismissNativeInstructions() {
         window?.rootViewController?.dismiss(animated: true)
     }
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
