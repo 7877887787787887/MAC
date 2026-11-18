@@ -106,7 +106,7 @@ private func requestRunnerStatus() {
         for host in hosts() {
             let fd = dial(host, 8765, 1.5)
             guard fd >= 0 else { continue }
-            let request = "GET \(path) HTTP/1.1\\r\\nHost: \(host)\\r\\nConnection: close\\r\\n\\r\\n"
+            let request = "GET \(path) HTTP/1.1\r\nHost: \(host)\r\nConnection: close\r\n\r\n"
             let sent = request.data(using: .utf8).map { data in
                 data.withUnsafeBytes { raw in
                     guard let base = raw.baseAddress else { return false }
