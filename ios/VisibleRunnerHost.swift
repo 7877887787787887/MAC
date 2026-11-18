@@ -227,7 +227,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         runnerPromptPresented = true
         let alert = UIAlertController(
             title: "Start WebDriverAgent",
-            message: "The relay app is running, but WebDriverAgent has not answered. Start WebDriverAgentRunner with your Xcode/Appium/CoreDevice launcher, then tap Retry.\\n\\nStatus: \(detail)",
+            message: "The relay app is running, but WebDriverAgent has not answered. Start WebDriverAgentRunner with your Xcode/Appium/CoreDevice launcher, then tap Retry.\n\nStatus: \(detail)",
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: "Retry", style: .default) { [weak self] _ in
