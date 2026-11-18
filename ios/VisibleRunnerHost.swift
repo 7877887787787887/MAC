@@ -5,6 +5,7 @@ import Darwin
 private enum RelayConfig {
     static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
     static let pairingPort: UInt16 = 12005
+    static let deviceUDID = "00008140-0004115A3406801C"
     // Keep relay reads bounded so a stalled peer cannot monopolize the socket loop.
     static let relayChunkSize = 16 * 1024
 }
@@ -97,6 +98,46 @@ private func relay(_ a: Int32, _ b: Int32) {
     }
     close(a); close(b)
 }
+private func requestRunnerStatus() {
+    // Ask the MSI relay to refresh the configured runner state. This is a
+    // read-only HTTP request; iOS cannot launch an XCTest/WDA runner itself.
+    DispatchQueue.global(qos: .utility).async {
+        let path = "/api/ui/stream-status?udid=\(RelayConfig.deviceUDID)"
+        for host in hosts() {
+            let fd = dial(host, 8765, 1.5)
+            guard fd >= 0 else { continue }
+            let request = "GET \(path) HTTP/1.1\\r\\nHost: \(host)\\r\\nConnection: close\\r\\n\\r\\n"
+            let sent = request.data(using: .utf8).map { data in
+                data.withUnsafeBytes { raw in
+                    guard let base = raw.baseAddress else { return false }
+                    return sendAll(fd, base, raw.count)
+                }
+            } ?? false
+            guard sent else { close(fd); continue }
+            var waiter = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            if Darwin.poll(&waiter, 1, 1_000) > 0 {
+                var response = [UInt8](repeating: 0, count: 512)
+                let count = response.withUnsafeMutableBytes { raw in
+                    recv(fd, raw.baseAddress, raw.count, 0)
+                }
+                if count > 0 {
+                    let line = String(bytes: response.prefix(count), encoding: .utf8)?
+                        .split(separator: "\n", maxSplits: 1).first?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? "HTTP response"
+                    RelayHealth.shared.set("runner-request", "\(host): \(line)")
+                    log("runner status requested from \(host): \(line)")
+                }
+            } else {
+                RelayHealth.shared.set("runner-request", "\(host): timeout")
+            }
+            close(fd)
+            return
+        }
+        RelayHealth.shared.set("runner-request", "no relay reachable")
+        log("runner status request could not reach an MSI relay")
+    }
+}
+
 private func startInboundPairing() {
     DispatchQueue.global(qos: .userInitiated).async {
         let server = socket(AF_INET, SOCK_STREAM, 0); guard server >= 0 else { return }; tune(server)
@@ -170,7 +211,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // Continuous socket service still requires the app to remain active under iOS lifecycle rules.
         let vc = HostController(); vc.view.backgroundColor = .black
         let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = vc; w.makeKeyAndVisible(); window = w
-        startInboundPairing(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
+        startInboundPairing(); requestRunnerStatus(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
         healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.healthLabel?.text = RelayHealth.shared.summary() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { vc.starting = false; vc.setNeedsStatusBarAppearanceUpdate() }
         log("normal launch; Swift relay host ready"); return true
@@ -197,6 +238,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         requestShortBackgroundLease(application)
     }
     func applicationWillEnterForeground(_ application: UIApplication) {
+        requestRunnerStatus()
         if backgroundLease != .invalid {
             application.endBackgroundTask(backgroundLease)
             backgroundLease = .invalid
