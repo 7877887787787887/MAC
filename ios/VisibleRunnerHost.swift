@@ -95,7 +95,10 @@ private func relay(_ a: Int32, _ b: Int32) {
         let source = (descriptors[0].revents & mask) != 0 ? a : b
         let destination = source == a ? b : a
         let count = buffer.withUnsafeMutableBytes { recv(source, $0.baseAddress, $0.count, 0) }
-        guard count > 0, buffer.withUnsafeBytes({ sendAll(destination, $0.baseAddress!, count) }) else { break }
+        guard count > 0, buffer.withUnsafeBytes({ raw in
+            guard let base = raw.baseAddress else { return false }
+            return sendAll(destination, base, count)
+        }) else { break }
     }
     close(a); close(b)
 }
@@ -177,7 +180,7 @@ private func startReverse(localPort: UInt16?, remotePort: UInt16) {
                 if bridge < 0 { continue }
                 let upstream: Int32 = localPort == nil
                     ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078))
-                    : loopback(localPort!)
+                    : localPort.map { loopback($0) } ?? -1
                 guard upstream >= 0 else {
                     close(bridge)
                     RelayHealth.shared.set("\(remotePort)", "local upstream unavailable")
