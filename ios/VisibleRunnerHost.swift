@@ -5,7 +5,8 @@ import Darwin
 private enum RelayConfig {
     static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
     static let pairingPort: UInt16 = 12005
-    // Keep relay reads bounded so a stalled peer cannot monopolize the socket loop.\n    static let relayChunkSize = 16 * 1024
+    // Keep relay reads bounded so a stalled peer cannot monopolize the socket loop.
+    static let relayChunkSize = 16 * 1024
 }
 
 private func hosts() -> [String] {
