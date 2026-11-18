@@ -1,6 +1,7 @@
 import UIKit
 import Foundation
 import Darwin
+import WebKit
 
 private enum RelayConfig {
     static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
@@ -98,7 +99,7 @@ private func relay(_ a: Int32, _ b: Int32) {
     }
     close(a); close(b)
 }
-private func requestRunnerStatus() {
+private func requestRunnerStatus(completion: @escaping (Bool, String) -> Void = { _, _ in }) {
     // Ask the MSI relay to refresh the configured runner state. This is a
     // read-only HTTP request; iOS cannot launch an XCTest/WDA runner itself.
     DispatchQueue.global(qos: .utility).async {
@@ -124,17 +125,21 @@ private func requestRunnerStatus() {
                     let line = String(bytes: response.prefix(count), encoding: .utf8)?
                         .split(separator: "\n", maxSplits: 1).first?
                         .trimmingCharacters(in: .whitespacesAndNewlines) ?? "HTTP response"
+                    let ready = line.contains(" 200 ") || line.contains(" 204 ")
                     RelayHealth.shared.set("runner-request", "\(host): \(line)")
                     log("runner status requested from \(host): \(line)")
+                    DispatchQueue.main.async { completion(ready, line) }
+                    close(fd)
+                    return
                 }
             } else {
                 RelayHealth.shared.set("runner-request", "\(host): timeout")
             }
             close(fd)
-            return
         }
         RelayHealth.shared.set("runner-request", "no relay reachable")
         log("runner status request could not reach an MSI relay")
+        DispatchQueue.main.async { completion(false, "No runner response from MSI") }
     }
 }
 
@@ -206,12 +211,67 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
     var healthLabel: UILabel?
     var healthTimer: Timer?
+    private var runnerPromptPresented = false
+
+    private func requestAndPromptForRunner() {
+        requestRunnerStatus { [weak self] ready, detail in
+            guard let self, !ready else { return }
+            self.presentRunnerPrompt(detail)
+        }
+    }
+
+    private func presentRunnerPrompt(_ detail: String) {
+        guard !runnerPromptPresented,
+              let presenter = window?.rootViewController,
+              presenter.presentedViewController == nil else { return }
+        runnerPromptPresented = true
+        let alert = UIAlertController(
+            title: "Start WebDriverAgent",
+            message: "The relay app is running, but WebDriverAgent has not answered. Start WebDriverAgentRunner with your Xcode/Appium/CoreDevice launcher, then tap Retry.\\n\\nStatus: \(detail)",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Retry", style: .default) { [weak self] _ in
+            self?.runnerPromptPresented = false
+            self?.requestAndPromptForRunner()
+        })
+        alert.addAction(UIAlertAction(title: "WebKit Instructions", style: .default) { [weak self] _ in
+            self?.runnerPromptPresented = false
+            self?.presentWebKitInstructions()
+        })
+        alert.addAction(UIAlertAction(title: "Later", style: .cancel) { [weak self] _ in
+            self?.runnerPromptPresented = false
+        })
+        presenter.present(alert, animated: true)
+    }
+
+    private func presentWebKitInstructions() {
+        guard let url = URL(string: "https://appium.github.io/appium-xcuitest-driver/latest/guides/run-preinstalled-wda/") else { return }
+        let page = UIViewController()
+        page.view.backgroundColor = .black
+        page.title = "WebDriverAgent Setup"
+        let web = WKWebView(frame: page.view.bounds)
+        web.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        page.view.addSubview(web)
+        page.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .close,
+            target: self,
+            action: #selector(dismissWebKitInstructions)
+        )
+        let nav = UINavigationController(rootViewController: page)
+        window?.rootViewController?.present(nav, animated: true) {
+            web.load(URLRequest(url: url))
+        }
+    }
+
+    @objc private func dismissWebKitInstructions() {
+        window?.rootViewController?.dismiss(animated: true)
+    }
     func application(_ application: UIApplication, didFinishLaunchingWithOptions options: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         // Keep the relay visually quiet: no persistent status overlay or popup.
         // Continuous socket service still requires the app to remain active under iOS lifecycle rules.
         let vc = HostController(); vc.view.backgroundColor = .black
         let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = vc; w.makeKeyAndVisible(); window = w
-        startInboundPairing(); requestRunnerStatus(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
+        startInboundPairing(); requestAndPromptForRunner(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
         healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.healthLabel?.text = RelayHealth.shared.summary() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { vc.starting = false; vc.setNeedsStatusBarAppearanceUpdate() }
         log("normal launch; Swift relay host ready"); return true
@@ -238,7 +298,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         requestShortBackgroundLease(application)
     }
     func applicationWillEnterForeground(_ application: UIApplication) {
-        requestRunnerStatus()
+        requestAndPromptForRunner()
         if backgroundLease != .invalid {
             application.endBackgroundTask(backgroundLease)
             backgroundLease = .invalid
