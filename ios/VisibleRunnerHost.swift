@@ -5,6 +5,7 @@ import Darwin
 private enum RelayConfig {
     static let defaultHosts = ["100.114.29.8", "msi.tail28f016.ts.net", "100.94.142.66"]
     static let pairingPort: UInt16 = 12005
+    // Keep relay reads bounded so a stalled peer cannot monopolize the socket loop.\n    static let relayChunkSize = 16 * 1024
 }
 
 private func hosts() -> [String] {
@@ -75,12 +76,12 @@ private func sendAll(_ fd: Int32, _ pointer: UnsafeRawPointer, _ count: Int) -> 
     var sent = 0
     while sent < count {
         let n = send(fd, pointer.advanced(by: sent), count - sent, 0)
-        if n <= 0 { return false }; sent += n
+        if n < 0, errno == EINTR { continue }; if n <= 0 { return false }; sent += n
     }
     return true
 }
 private func relay(_ a: Int32, _ b: Int32) {
-    var buffer = [UInt8](repeating: 0, count: 65536)
+    var buffer = [UInt8](repeating: 0, count: RelayConfig.relayChunkSize)
     while true {
         var descriptors = [
             pollfd(fd: a, events: Int16(POLLIN), revents: 0),
@@ -116,17 +117,41 @@ private func startInboundPairing() {
 private func startReverse(localPort: UInt16?, remotePort: UInt16) {
     DispatchQueue.global(qos: .userInitiated).async {
         var delay: UInt32 = 1
+        var preferredHost: String?
         while true {
+            let configuredHosts = hosts()
+            let candidates = preferredHost.map { preferred in
+                [preferred] + configuredHosts.filter { $0 != preferred }
+            } ?? configuredHosts
             var worked = false
-            for host in hosts() {
+            for host in candidates {
                 RelayHealth.shared.set("\(remotePort)", "trying \(host)")
-                let bridge = dial(host, remotePort); if bridge < 0 { continue }
-                worked = true; delay = 1; RelayHealth.shared.set("\(remotePort)", "connected via \(host)"); log("connected to \(host):\(remotePort)")
-                let upstream: Int32 = localPort == nil ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078)) : loopback(localPort!)
-                if upstream >= 0 { relay(bridge, upstream) } else { close(bridge); log("local upstream unavailable") }
+                let bridge = dial(host, remotePort)
+                if bridge < 0 { continue }
+                let upstream: Int32 = localPort == nil
+                    ? (remotePort == RelayConfig.pairingPort ? pairingUpstream() : loopback(62078))
+                    : loopback(localPort!)
+                guard upstream >= 0 else {
+                    close(bridge)
+                    RelayHealth.shared.set("\(remotePort)", "local upstream unavailable")
+                    continue
+                }
+                worked = true
+                delay = 1
+                preferredHost = host
+                RelayHealth.shared.set("\(remotePort)", "connected via \(host)")
+                log("connected to \(host):\(remotePort)")
+                relay(bridge, upstream)
                 break
             }
-            if worked { sleep(1) } else { RelayHealth.shared.set("\(remotePort)", "retrying in \(delay)s"); log("no host reachable for \(remotePort); retry in \(delay)s"); sleep(delay); delay = min(delay * 2, 8) }
+            if worked {
+                sleep(1)
+            } else {
+                RelayHealth.shared.set("\(remotePort)", "retrying in \(delay)s")
+                log("no complete path for \(remotePort); retry in \(delay)s")
+                sleep(delay)
+                delay = min(delay * 2, 8)
+            }
         }
     }
 }
