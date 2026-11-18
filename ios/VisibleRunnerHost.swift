@@ -238,7 +238,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         })
         alert.addAction(UIAlertAction(title: "Native Setup Guide", style: .default) { [weak self] _ in
             self?.runnerPromptPresented = false
-            self?.presentWebKitInstructions()
+            self?.presentNativeInstructions()
         })
         alert.addAction(UIAlertAction(title: "Later", style: .cancel) { [weak self] _ in
             self?.runnerPromptPresented = false
