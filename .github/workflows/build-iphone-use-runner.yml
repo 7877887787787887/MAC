@@ -32,10 +32,11 @@ jobs:
           set -euo pipefail
           file=runner/IPhoneUseRunner/IPhoneUseRunnerUITests/RunnerH264.swift
           sed -i '' 's/var fps = 30/var fps = 60/' "$file"
-          sed -i '' 's/var scalePercent = [0-9][0-9]*/var scalePercent = 50/' "$file"
-          sed -i '' 's/var kbps = 1500/var kbps = 8000/' "$file"
+          sed -i '' 's/var scalePercent = [0-9][0-9]*/var scalePercent = 100/' "$file"
+          sed -i '' 's/var kbps = 1500/var kbps = 10000/' "$file"
           sed -i '' 's/var keyframeSeconds = 10.0/var keyframeSeconds = 2.0/' "$file"
-          grep -nE 'var fps|scalePercent|var kbps|keyframeSeconds' "$file"
+          sed -i '' 's/var mode = Mode.performance/var mode = Mode.quality/' "$file"
+          grep -nE 'var fps|scalePercent|var kbps|keyframeSeconds|var mode' "$file"
 
       - name: Build unsigned XCTest runner
         working-directory: iphone-use/runner/IPhoneUseRunner
