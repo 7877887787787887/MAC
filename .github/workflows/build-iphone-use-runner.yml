@@ -25,6 +25,25 @@ jobs:
           ref: v0.27.34
           path: iphone-use
 
+      - name: Record current Appium iOS compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p custom-build/build-metadata
+          cat > custom-build/build-metadata/appium-ios-compatibility.json <<'JSON'
+          {
+            "xcuitestDriver": "13.5.0",
+            "appium": "4.x",
+            "webdriverAgent": "17.x",
+            "remoteXpc": "6.1.4",
+            "mediaProxy": "1.1.0",
+            "realDeviceStream": "iOS/iPadOS 27+",
+            "stream": "H.264 via Media Foundation on Windows",
+            "verification": "dependency compatibility record only; physical-device streaming requires a connected device"
+          }
+          JSON
+          python3 -m json.tool custom-build/build-metadata/appium-ios-compatibility.json
+
       - name: Tune runner for high quality and low latency
         working-directory: iphone-use
         shell: bash
@@ -106,6 +125,7 @@ jobs:
           path: |
             iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa
             iphone-use/runner/IPhoneUseRunner/export/iphone-use-visible-runner-unsigned.ipa.sha256
+            custom-build/build-metadata/appium-ios-compatibility.json
 
       - name: Upload package log
         if: always()
