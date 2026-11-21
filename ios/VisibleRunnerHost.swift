@@ -106,11 +106,11 @@ private func requestRunnerStatus(completion: @escaping (Bool, String) -> Void = 
     // Ask the MSI relay to refresh the configured runner state. This is a
     // read-only HTTP request; iOS cannot launch an XCTest/WDA runner itself.
     DispatchQueue.global(qos: .utility).async {
-        let path = "/api/ui/stream-status?udid=\(RelayConfig.deviceUDID)"
+        let path = "/api/ui/screen-start?udid=\(RelayConfig.deviceUDID)"
         for host in hosts() {
             let fd = dial(host, 8765, 1.5)
             guard fd >= 0 else { continue }
-            let request = "GET \(path) HTTP/1.1\r\nHost: \(host)\r\nConnection: close\r\n\r\n"
+            let request = "POST \(path) HTTP/1.1\r\nHost: \(host)\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
             let sent = request.data(using: .utf8).map { data in
                 data.withUnsafeBytes { raw in
                     guard let base = raw.baseAddress else { return false }
