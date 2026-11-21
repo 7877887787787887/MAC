@@ -214,11 +214,35 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     var healthLabel: UILabel?
     var healthTimer: Timer?
     private var runnerPromptPresented = false
+    private var launchRetryTimer: Timer?
+    private var launchRetryCount = 0
 
     private func requestAndPromptForRunner() {
         requestRunnerStatus { [weak self] ready, detail in
-            guard let self, !ready else { return }
-            self.presentRunnerPrompt(detail)
+            guard let self else { return }
+            if ready {
+                self.launchRetryCount = 0
+                self.launchRetryTimer?.invalidate()
+                self.launchRetryTimer = nil
+                self.runnerPromptPresented = false
+                RelayHealth.shared.set("launch-bootstrap", "XCTest/WDA responding")
+                return
+            }
+            self.launchRetryCount += 1
+            RelayHealth.shared.set("launch-bootstrap", "attempt \(self.launchRetryCount)/10")
+            if self.launchRetryCount <= 10 {
+                self.scheduleLaunchRetry()
+            }
+            if self.launchRetryCount == 10 {
+                self.presentRunnerPrompt(detail)
+            }
+        }
+    }
+
+    private func scheduleLaunchRetry() {
+        launchRetryTimer?.invalidate()
+        launchRetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+            self?.requestAndPromptForRunner()
         }
     }
 
@@ -292,7 +316,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // Continuous socket service still requires the app to remain active under iOS lifecycle rules.
         let vc = HostController(); vc.view.backgroundColor = .black
         let w = UIWindow(frame: UIScreen.main.bounds); w.rootViewController = vc; w.makeKeyAndVisible(); window = w
-        startInboundPairing(); requestAndPromptForRunner(); startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
+        startInboundPairing(); requestAndPromptForRunner(); launchRetryTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in self?.requestAndPromptForRunner() }; startReverse(localPort: nil, remotePort: 12005); startReverse(localPort: nil, remotePort: 12007); startReverse(localPort: 8100, remotePort: 18100); startReverse(localPort: 9100, remotePort: 19100)
         healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.healthLabel?.text = RelayHealth.shared.summary() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { vc.starting = false; vc.setNeedsStatusBarAppearanceUpdate() }
         log("normal launch; Swift relay host ready"); return true
