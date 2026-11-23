@@ -69,6 +69,9 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
+          TEST_RUNNER_PATH="$(find build/Build/Products -type d \( -name "*UITests-Runner.app" -o -name "*xctrunner.app" \) -print -quit)"
+          test -n "$TEST_RUNNER_PATH"
+          test -f "$TEST_RUNNER_PATH/Info.plist"
           xcrun --sdk iphoneos swiftc \
             -target arm64-apple-ios16.0 \
             -module-name iPhoneUseRemote \
@@ -109,7 +112,9 @@ jobs:
           lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist"
           cp -R "$APP_PATH" export/Payload/
+          cp -R "$TEST_RUNNER_PATH" export/Payload/
           cd export
           zip -qry iphone-use-visible-runner-unsigned.ipa Payload
           unzip -tq iphone-use-visible-runner-unsigned.ipa
