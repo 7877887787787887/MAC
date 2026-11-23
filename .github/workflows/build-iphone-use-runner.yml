@@ -72,28 +72,11 @@ jobs:
           TEST_RUNNER_PATH="$(find build/Build/Products -type d \( -name "*UITests-Runner.app" -o -name "*xctrunner.app" \) -print -quit)"
           test -n "$TEST_RUNNER_PATH"
           test -f "$TEST_RUNNER_PATH/Info.plist"
-          xcrun --sdk iphoneos swiftc \
-            -target arm64-apple-ios16.0 \
-            -module-name iPhoneUseRemote \
-            -parse-as-library \
-            ../../../custom-build/ios/VisibleRunnerHost.swift \
-            -framework UIKit -framework Foundation \
-            -o "$APP_PATH/iPhoneUseRemote"
-          file "$APP_PATH/iPhoneUseRemote"
-          strings "$APP_PATH/iPhoneUseRemote" | grep -q 'ipu-visible-host-swift'
-          chmod +x "$APP_PATH/iPhoneUseRemote"
-          STARTUP_VIDEO="../../../custom-build/ios/assets/device-linked.mp4"
-          if [ -f "$STARTUP_VIDEO" ]; then
-            cp "$STARTUP_VIDEO" "$APP_PATH/device-linked.mp4"
-          else
-            echo "Startup video missing; the host will use its bounded UIKit animation."
-          fi
           /usr/libexec/PlistBuddy -c 'Add :UIViewControllerBasedStatusBarAppearance bool true' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :UIViewControllerBasedStatusBarAppearance true' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIStatusBarHidden bool true' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :UIStatusBarHidden true' "$APP_PATH/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable iPhoneUseRemote' "$APP_PATH/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string iPhone Use Remote' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName iPhone Use Remote' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :NSBonjourServices' "$APP_PATH/Info.plist" || true
@@ -112,10 +95,7 @@ jobs:
           lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
-          /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist" || \
-            /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist"
           cp -R "$APP_PATH" export/Payload/
-          cp -R "$TEST_RUNNER_PATH" export/Payload/
           cd export
           zip -qry iphone-use-visible-runner-unsigned.ipa Payload
           unzip -tq iphone-use-visible-runner-unsigned.ipa
