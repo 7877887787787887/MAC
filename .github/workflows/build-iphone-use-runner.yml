@@ -91,7 +91,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload/iPhoneUseControl.app
-          xcrun --sdk iphoneos swiftc -target arm64-apple-ios16.0 -parse-as-library ../../../custom-build/ios/IPhoneUseControl.swift -framework UIKit -framework Foundation -o export/Payload/iPhoneUseControl.app/IPhoneUseControl
+          xcrun --sdk iphoneos swiftc -swift-version 5 -target arm64-apple-ios16.0 -parse-as-library ../../../custom-build/ios/IPhoneUseControl.swift -framework UIKit -framework Foundation -o export/Payload/iPhoneUseControl.app/IPhoneUseControl
           /usr/libexec/PlistBuddy -c 'Add :CFBundleExecutable string iPhoneUseControl' export/Payload/iPhoneUseControl.app/Info.plist
           /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.leeguoo.iphone-use.control' export/Payload/iPhoneUseControl.app/Info.plist
           /usr/libexec/PlistBuddy -c 'Add :CFBundleName string iPhoneUseControl' export/Payload/iPhoneUseControl.app/Info.plist
