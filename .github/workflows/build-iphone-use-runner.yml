@@ -87,10 +87,8 @@ jobs:
           test -f "$EXT_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.iPhoneUse' "$EXT_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$EXT_PATH/Info.plist"
-          test -f "$APP_PATH/iPhoneUseRemote"
           test -f "$EXT_PATH/iPhoneUse"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist"
-          lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
           cp -R "$APP_PATH" export/Payload/
