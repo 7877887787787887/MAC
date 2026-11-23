@@ -112,7 +112,8 @@ jobs:
           lipo "$APP_PATH/iPhoneUseRemote" -verify_arch arm64
           lipo "$APP_PATH/PlugIns/iPhoneUse.xctest/iPhoneUse" -verify_arch arm64
           mkdir -p export/Payload
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$TEST_RUNNER_PATH/Info.plist"
           cp -R "$APP_PATH" export/Payload/
           cp -R "$TEST_RUNNER_PATH" export/Payload/
           cd export
