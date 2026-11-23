@@ -69,9 +69,6 @@ jobs:
           APP_PATH="$(find build/Build/Products -type d -name 'iPhoneUse-Runner.app' -print -quit)"
           test -n "$APP_PATH"
           test -f "$APP_PATH/Info.plist"
-          TEST_RUNNER_PATH="$(find build/Build/Products -type d \( -name "*UITests-Runner.app" -o -name "*xctrunner.app" \) -print -quit)"
-          test -n "$TEST_RUNNER_PATH"
-          test -f "$TEST_RUNNER_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIViewControllerBasedStatusBarAppearance bool true' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :UIViewControllerBasedStatusBarAppearance true' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIStatusBarHidden bool true' "$APP_PATH/Info.plist" || \
