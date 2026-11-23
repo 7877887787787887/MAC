@@ -73,7 +73,8 @@ jobs:
             /usr/libexec/PlistBuddy -c 'Set :UIViewControllerBasedStatusBarAppearance true' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :UIStatusBarHidden bool true' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :UIStatusBarHidden true' "$APP_PATH/Info.plist"
-          /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$APP_PATH/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Add :CFBundleIdentifier string com.leeguoo.iphone-use.remote.xctrunner' "$APP_PATH/Info.plist" || \
+            /usr/libexec/PlistBuddy -c 'Set :CFBundleIdentifier com.leeguoo.iphone-use.remote.xctrunner' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Add :CFBundleDisplayName string iPhone Use Remote' "$APP_PATH/Info.plist" || \
             /usr/libexec/PlistBuddy -c 'Set :CFBundleDisplayName iPhone Use Remote' "$APP_PATH/Info.plist"
           /usr/libexec/PlistBuddy -c 'Delete :NSBonjourServices' "$APP_PATH/Info.plist" || true
